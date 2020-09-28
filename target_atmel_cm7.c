@@ -67,6 +67,10 @@
 #define CMD_SGPB               0x5a00000b
 #define CMD_CGPB               0x5a00000c
 #define CMD_GGPB               0x5a00000d
+#define CMD_WUS                0x5a000012
+#define CMD_EUS                0x5a000013
+#define CMD_STUS               0x5a000014
+#define CMD_SPUS               0x5a000015
 
 #define PAGES_IN_ERASE_BLOCK   16
 
@@ -201,72 +205,67 @@ static void target_deselect(void)
 }
 
 //-----------------------------------------------------------------------------
-static void target_erase(void)
+static void target_erase_user_signature(void)
 {
-  dap_write_word(EEFC_FCR, CMD_EA);
+  dap_write_word(EEFC_FCR, CMD_EUS);
   while (0 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
+  verbose("User Signature erase");
 }
 
 //-----------------------------------------------------------------------------
 static void target_lock(void)
 {
-  dap_write_word(EEFC_FCR, CMD_SGPB | (0 << 8));
+  //dap_write_word(EEFC_FCR, CMD_SGPB | (0 << 8));
+  verbose("User Signature area cannot be locked!");
 }
 
 //-----------------------------------------------------------------------------
-static void target_program(void)
+static void target_program_user_signature(void)
 {
-  uint32_t addr = FLASH_START + target_options.offset;
-  uint32_t number_of_pages, page_offset;
+  uint32_t addr = FLASH_START;
   uint32_t offs = 0;
   uint8_t *buf = target_options.file_data;
   uint32_t size = target_options.file_size;
 
-  number_of_pages = (size + FLASH_PAGE_SIZE - 1) / FLASH_PAGE_SIZE;
-  page_offset = target_options.offset / FLASH_PAGE_SIZE;
-
-  for (uint32_t page = 0; page < number_of_pages; page += PAGES_IN_ERASE_BLOCK)
+  if (size > FLASH_PAGE_SIZE)
   {
-    dap_write_word(EEFC_FCR, CMD_EPA | (((page_offset + page) | 2) << 8));
-    while (0 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
-
-    verbose(".");
+    verbose("Error! The file size cannot exceed 512 bytes, nothing");
   }
-
-  verbose(",");
-
-  for (uint32_t page = 0; page < number_of_pages; page++)
-  {
+  else
+  { 
     dap_write_block(addr, &buf[offs], FLASH_PAGE_SIZE);
-    addr += FLASH_PAGE_SIZE;
-    offs += FLASH_PAGE_SIZE;
-
-    dap_write_word(EEFC_FCR, CMD_WP | ((page + page_offset) << 8));
+    
+    dap_write_word(EEFC_FCR, CMD_WUS);
     while (0 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
-
-    verbose(".");
   }
 }
 
 //-----------------------------------------------------------------------------
-static void target_verify(void)
+static void target_verify_user_signature(void)
 {
-  uint32_t addr = FLASH_START + target_options.offset;
-  uint32_t block_size;
+  uint32_t addr = FLASH_START;
   uint32_t offs = 0;
   uint8_t *bufb;
   uint8_t *bufa = target_options.file_data;
   uint32_t size = target_options.file_size;
 
-  bufb = buf_alloc(FLASH_PAGE_SIZE);
-
-  while (size)
+  if (size > FLASH_PAGE_SIZE)
   {
+    verbose("Error! The file size cannot exceed 512 bytes, nothing");
+  }
+  else
+  {
+    bufb = buf_alloc(FLASH_PAGE_SIZE);
+    
+    dap_write_word(EEFC_FCR, CMD_STUS);
+    while (1 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
+
     dap_read_block(addr, bufb, FLASH_PAGE_SIZE);
 
-    block_size = (size > FLASH_PAGE_SIZE) ? FLASH_PAGE_SIZE : size;
+    dap_write_word(EEFC_FCR, CMD_SPUS);
+    while (0 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
 
-    for (int i = 0; i < (int)block_size; i++)
+    for (int i = 0; i < (int)FLASH_PAGE_SIZE; i++)
     {
       if (bufa[offs + i] != bufb[i])
       {
@@ -277,36 +276,32 @@ static void target_verify(void)
       }
     }
 
-    addr += FLASH_PAGE_SIZE;
-    offs += FLASH_PAGE_SIZE;
-    size -= block_size;
-
-    verbose(".");
+    buf_free(bufb);
   }
-
-  buf_free(bufb);
 }
 
 //-----------------------------------------------------------------------------
-static void target_read(void)
+static void target_read_user_signature(void)
 {
-  uint32_t addr = FLASH_START + target_options.offset;
+  uint32_t addr = FLASH_START;
   uint32_t offs = 0;
   uint8_t *buf = target_options.file_data;
   uint32_t size = target_options.size;
 
-  while (size)
-  {
-    dap_read_block(addr, &buf[offs], FLASH_PAGE_SIZE);
+  verbose("User Signature area!", size);
 
-    addr += FLASH_PAGE_SIZE;
-    offs += FLASH_PAGE_SIZE;
-    size -= FLASH_PAGE_SIZE;
+  if (size > FLASH_PAGE_SIZE)
+    verbose("\n Reading 512 bytes...");
 
-    verbose(".");
-  }
+  dap_write_word(EEFC_FCR, CMD_STUS);
+  while (1 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
 
-  save_file(target_options.name, buf, target_options.size);
+  dap_read_block(addr, &buf[offs], FLASH_PAGE_SIZE);
+
+  dap_write_word(EEFC_FCR, CMD_SPUS);
+  while (0 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
+
+  save_file(target_options.name, buf, FLASH_PAGE_SIZE);
 }
 
 //-----------------------------------------------------------------------------
@@ -362,12 +357,12 @@ target_ops_t target_atmel_cm7_ops =
 {
   .select    = target_select,
   .deselect  = target_deselect,
-  .erase     = target_erase,
+  .erase     = target_erase_user_signature,
   .lock      = target_lock,
-  .unlock    = target_erase,
-  .program   = target_program,
-  .verify    = target_verify,
-  .read      = target_read,
+  .unlock    = target_erase_user_signature,
+  .program   = target_program_user_signature,
+  .verify    = target_verify_user_signature,
+  .read      = target_read_user_signature,
   .fread     = target_fuse_read,
   .fwrite    = target_fuse_write,
   .enumerate = target_enumerate,

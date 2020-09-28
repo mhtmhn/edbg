@@ -1,5 +1,5 @@
-COMPILER ?= gcc
-UNAME ?= $(shell uname)
+COMPILER ?= i686-w64-mingw32-gcc
+UNAME ?= Windows
 
 SRCS = \
   dap.c \
@@ -21,12 +21,12 @@ HDRS = \
   target.h
 
 ifeq ($(UNAME), Linux)
-  BIN = edbg
+  BIN = usersignature
   SRCS += dbg_lin.c
   LIBS += -ludev
 else
   ifeq ($(UNAME), Darwin)
-    BIN = edbg
+    BIN = usersignature
     SRCS += dbg_mac.c
     LIBS += /usr/local/lib/libhidapi.a
     LIBS += -framework IOKit
@@ -34,7 +34,7 @@ else
     HIDAPI = /usr/local/lib/libhidapi.a
     CFLAGS += -I/usr/local/include/hidapi
   else
-    BIN = edbg.exe
+    BIN = usersignature.exe
     SRCS += dbg_win.c
     LIBS += -lhid -lsetupapi
   endif
