@@ -353,7 +353,7 @@ void reconnect_debugger(void)
 //-----------------------------------------------------------------------------
 static void print_help(char *name)
 {
-  message("CMSIS-DAP SWD User Signature Programmer " VERSION ", built " __DATE__ " " __TIME__ " \n\n");
+  message("CMSIS-DAP SWD Unique ID Reader " VERSION ", built " __DATE__ " " __TIME__ " \n\n");
 
   if (g_target)
   {
@@ -371,10 +371,7 @@ static void print_help(char *name)
       "Options:\n"
       "  -h, --help                 print this help message and exit\n"
       "  -b, --verbose              print verbose messages\n"
-      "  -e, --erase                erase user signature area before programming\n"
-      "  -p, --program              program user signature area\n"
-      "  -v, --verify               verify user signature area\n"
-      "  -r, --read                 read user signature area to file\n"
+      "  -r, --read                 read Unique ID area to file\n"
       "  -f, --file <file>          binary file to be programmed or verified; also read output file name\n"
       "  -t, --target <name>        specify a target type (use '-t list' for a list of supported target types)\n"
       "  -l, --list                 list all available debuggers\n"
@@ -476,25 +473,14 @@ int main(int argc, char **argv)
       g_target_options.lock || g_target_options.read || g_target_options.fuse_cmd ||
       g_list || g_target))
     {
-      message("Custom User Signature only build of https://github.com/ataradov/edbg \n");
+      message("Custom Unique ID only build of https://github.com/ataradov/edbg \n");
       message("for SAM E/S/V: \n");
       message("Examples: \n");
 
-      message("---------------------- \n");
-      message("Erase User Signature \n");
-      message("---------------------- \n");
-      message("usersignature -b -t same70 -c 10000 -e \n\n\n");
-
-
       message("--------------------- \n");
-      message("Read User Signature \n");
+      message("Read User ID \n");
       message("--------------------- \n");
-      message("usersignature -b -t same70 -c 10000 -r -f read_file.bin \n\n\n");
-
-      message("----------------------------- \n");
-      message("Write Verify User Signature \n");
-      message("----------------------------- \n");
-      message("usersignature -b -t same70 -c 10000 -pv -f write_file.bin \n\n\n");
+      message("uniqueid -b -t same70 -c 10000 -r -f uniqueid.bin \n\n\n");
 
       error_exit("No actions specified!");
     }

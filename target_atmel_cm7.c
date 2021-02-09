@@ -67,10 +67,10 @@
 #define CMD_SGPB               0x5a00000b
 #define CMD_CGPB               0x5a00000c
 #define CMD_GGPB               0x5a00000d
+#define CMD_STUI               0x5a00000e
+#define CMD_SPUI               0x5a00000f
 #define CMD_WUS                0x5a000012
 #define CMD_EUS                0x5a000013
-#define CMD_STUS               0x5a000014
-#define CMD_SPUS               0x5a000015
 
 #define PAGES_IN_ERASE_BLOCK   16
 
@@ -205,103 +205,40 @@ static void target_deselect(void)
 }
 
 //-----------------------------------------------------------------------------
-static void target_erase_user_signature(void)
-{
-  dap_write_word(EEFC_FCR, CMD_EUS);
-  while (0 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
-  verbose("User Signature erase");
-}
-
-//-----------------------------------------------------------------------------
 static void target_lock(void)
 {
   //dap_write_word(EEFC_FCR, CMD_SGPB | (0 << 8));
-  verbose("User Signature area cannot be locked!");
+  verbose("UID area cannot be locked!");
 }
 
 //-----------------------------------------------------------------------------
-static void target_program_user_signature(void)
+static void target_uid_invalid(void)
 {
-  uint32_t addr = FLASH_START;
-  uint32_t offs = 0;
-  uint8_t *buf = target_options.file_data;
-  uint32_t size = target_options.file_size;
-
-  if (size > FLASH_PAGE_SIZE)
-  {
-    verbose("Error! The file size cannot exceed 512 bytes, nothing");
-  }
-  else
-  { 
-    dap_write_block(addr, &buf[offs], FLASH_PAGE_SIZE);
-    
-    dap_write_word(EEFC_FCR, CMD_WUS);
-    while (0 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
-  }
+  message("Invalid parameter or action for this custom build!");
 }
 
 //-----------------------------------------------------------------------------
-static void target_verify_user_signature(void)
-{
-  uint32_t addr = FLASH_START;
-  uint32_t offs = 0;
-  uint8_t *bufb;
-  uint8_t *bufa = target_options.file_data;
-  uint32_t size = target_options.file_size;
-
-  if (size > FLASH_PAGE_SIZE)
-  {
-    verbose("Error! The file size cannot exceed 512 bytes, nothing");
-  }
-  else
-  {
-    bufb = buf_alloc(FLASH_PAGE_SIZE);
-    
-    dap_write_word(EEFC_FCR, CMD_STUS);
-    while (1 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
-
-    dap_read_block(addr, bufb, FLASH_PAGE_SIZE);
-
-    dap_write_word(EEFC_FCR, CMD_SPUS);
-    while (0 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
-
-    for (int i = 0; i < (int)FLASH_PAGE_SIZE; i++)
-    {
-      if (bufa[offs + i] != bufb[i])
-      {
-        verbose("\nat address 0x%x expected 0x%02x, read 0x%02x\n",
-            addr + i, bufa[offs + i], bufb[i]);
-        buf_free(bufb);
-        error_exit("verification failed");
-      }
-    }
-
-    buf_free(bufb);
-  }
-}
-
-//-----------------------------------------------------------------------------
-static void target_read_user_signature(void)
+static void target_read_uid(void)
 {
   uint32_t addr = FLASH_START;
   uint32_t offs = 0;
   uint8_t *buf = target_options.file_data;
   uint32_t size = target_options.size;
 
-  verbose("User Signature area!", size);
+  verbose(" Unique ID area!", size);
 
-  if (size > FLASH_PAGE_SIZE)
-    verbose("\n Reading 512 bytes...");
+  if (size > 16)
+    verbose("\nReading 128 bits...");
 
-  dap_write_word(EEFC_FCR, CMD_STUS);
+  dap_write_word(EEFC_FCR, CMD_STUI);
   while (1 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
 
-  dap_read_block(addr, &buf[offs], FLASH_PAGE_SIZE);
+  dap_read_block(addr, &buf[offs], 16);
 
-  dap_write_word(EEFC_FCR, CMD_SPUS);
+  dap_write_word(EEFC_FCR, CMD_SPUI);
   while (0 == (dap_read_word(EEFC_FSR) & FSR_FRDY));
 
-  save_file(target_options.name, buf, FLASH_PAGE_SIZE);
+  save_file(target_options.name, buf, 16);
 }
 
 //-----------------------------------------------------------------------------
@@ -357,12 +294,12 @@ target_ops_t target_atmel_cm7_ops =
 {
   .select    = target_select,
   .deselect  = target_deselect,
-  .erase     = target_erase_user_signature,
+  .erase     = target_uid_invalid,
   .lock      = target_lock,
-  .unlock    = target_erase_user_signature,
-  .program   = target_program_user_signature,
-  .verify    = target_verify_user_signature,
-  .read      = target_read_user_signature,
+  .unlock    = target_uid_invalid,
+  .program   = target_uid_invalid,
+  .verify    = target_uid_invalid,
+  .read      = target_read_uid,
   .fread     = target_fuse_read,
   .fwrite    = target_fuse_write,
   .enumerate = target_enumerate,
